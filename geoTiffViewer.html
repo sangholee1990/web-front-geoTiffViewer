@@ -14,6 +14,9 @@
     <!--        <script src="https://unpkg.com/chroma-js"></script>-->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chroma-js/2.1.0/chroma.min.js"></script>
     <script src="https://unpkg.com/georaster-layer-for-leaflet/dist/georaster-layer-for-leaflet.min.js"></script>
+    <script src="https://unpkg.com/geoblaze"></script>
+    <script src="https://unpkg.com/georaster-utils"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
 
     <style>
         #mapid {
@@ -43,14 +46,10 @@
 
 <body>
 <div id="mapid"></div>
+<div id="info">Move your mouse over the map</div>
 <!--<div id="colorbar" class="color-bar"></div>-->
 
 <script type="text/javascript">
-
-    // NetCDf를 이용한 geoTiff 변환
-    // https://help.marine.copernicus.eu/en/articles/5029956-how-to-convert-netcdf-to-geotiff
-    // https://nsidc.org/data/user-resources/help-center/how-convert-netcdf-variables-geotiff
-
 
     let map = L.map('mapid', {
         center: [37.0, 137.],
@@ -85,70 +84,93 @@
     let geotiff_file = "data/air.mon.mean_new.tif";
     fetch(geotiff_file)
         .then(response => response.arrayBuffer())
-        .then(arrayBuffer => {
-            parseGeoraster(arrayBuffer).then(georaster => {
+        // .then(arrayBuffer => {
+        //     parseGeoraster(arrayBuffer).then(georaster => {
+        .then(arrayBuffer => Promise.all([
+            parseGeoraster(arrayBuffer)
+        ]))
+        .then(([georaster]) => {
+            debugger;
+            // let scale = chroma.scale(["#f5f7ff", "#d6e5f0", "#a4cbe5", "#81aed6", "#668ec1", "#eeef4c", "#f7b768", "#f55857", "#aa6a81", "#765a88"])
+            //     .domain([0, 200]).classes([0, 1, 3, 5, 10, 20, 30, 40, 50, 80, 200]);
 
-                debugger;
-                // let scale = chroma.scale(["#f5f7ff", "#d6e5f0", "#a4cbe5", "#81aed6", "#668ec1", "#eeef4c", "#f7b768", "#f55857", "#aa6a81", "#765a88"])
-                //     .domain([0, 200]).classes([0, 1, 3, 5, 10, 20, 30, 40, 50, 80, 200]);
+            // 클래스 구간 동적으로 설정하기 (예: 10개의 구간)
+            const minValue = georaster.mins[0]
+            const maxValue = georaster.maxs[0]
 
-                // 클래스 구간 동적으로 설정하기 (예: 10개의 구간)
-                const minValue = georaster.mins[0]
-                const maxValue = georaster.maxs[0]
+            const numberOfClasses = 10;
+            const classInterval = (maxValue - minValue) / numberOfClasses;
+            const classes = Array.from({length: numberOfClasses + 1}, (_, i) => minValue + i * classInterval);
+            const scale = chroma.scale('Spectral').domain([maxValue, minValue]).classes(classes);
 
-                const numberOfClasses = 10;
-                const classInterval = (maxValue - minValue) / numberOfClasses;
-                const classes = Array.from({length: numberOfClasses + 1}, (_, i) => minValue + i * classInterval);
-                const scale = chroma.scale('Spectral').domain([maxValue, minValue]).classes(classes);
-
-                let layer = new GeoRasterLayer({
-                    georaster: georaster,
-                    opacity: 0.6,
-                    pixelValuesToColorFn: function (pixelValues) {
-                        let pixelValue = pixelValues[0]; // there's just one band in this raster
-                        if (pixelValue === 0) return null;
-                        let color = scale(pixelValue).hex();
-                        return color;
-                    },
-                    resolution: 256
-                });
-
-                layer.addTo(map);
-                map.fitBounds(layer.getBounds());
-
-
-                // georaster 데이터를 GeoJSON 형식으로 변환
-                // const geojson = geoblaze.isolines(georaster, 'elevation', {levels: classes});
-                //
-                // // 컨투어 레이어 추가
-                // L.geoJSON(geojson, {
-                //     style: function (feature) {
-                //         return {
-                //             color: scale(feature.properties.value).hex(),
-                //             weight: 2
-                //         };
-                //     }
-                // }).addTo(map);
-
-                // 컨투어 레이어 추가
-                L.contour({
-                    geojson: L.geoJson(georaster),
-                    style: function (feature) {
-                        return {
-                            color: scale(feature.properties.value).hex(),
-                            weight: 2
-                        };
-                    }
-                }).addTo(map);
-
-
-                // 컬러바 생성 및 추가
-                // const legend = create_legend(minValue, maxValue, numberOfClasses, scale);
-                // L.control.legend = function (opts) {
-                //     return new L.Control.Legend(opts);
-                // };
-                // L.control.legend({position: 'bottomright'}).addTo(map);
+            let layer = new GeoRasterLayer({
+                georaster: georaster,
+                opacity: 0.6,
+                pixelValuesToColorFn: function (pixelValues) {
+                    let pixelValue = pixelValues[0]; // there's just one band in this raster
+                    if (pixelValue === 0) return null;
+                    let color = scale(pixelValue).hex();
+                    return color;
+                },
+                resolution: 256
             });
+
+            layer.addTo(map);
+
+            // 초기 표출 영역 설정
+            // map.fitBounds(layer.getBounds());
+
+
+            // georaster 데이터를 GeoJSON 형식으로 변환
+            // const geojson = geoblaze.isolines(georaster, 'elevation', {levels: classes});
+            //
+            // // 컨투어 레이어 추가
+            // L.geoJSON(geojson, {
+            //     style: function (feature) {
+            //         return {
+            //             color: scale(feature.properties.value).hex(),
+            //             weight: 2
+            //         };
+            //     }
+            // }).addTo(map);
+
+            // 컨투어 레이어 추가
+            // L.contour({
+            //     geojson: L.geoJson(georaster),
+            //     style: function (feature) {
+            //         return {
+            //             color: scale(feature.properties.value).hex(),
+            //             weight: 2
+            //         };
+            //     }
+            // }).addTo(map);
+
+            map.on('mousemove', function (e) {
+                const latlng = e.latlng;
+                const pixelValue = geoblaze.identify(layer.georasters[0], [latlng.lng, latlng.lat]) || '';
+                $('#info').text(pixelValue)
+
+
+                // $('#info').textContent = `${pixelValue}`;
+
+                // const [x, y] = map.project(latlng, layer._tileZoom).divideBy(256).floor();
+                // if (pixelValue > 0) {
+                //     // const pixelValue = geoblaze.identify(layer._raster, [latlng.lng, latlng.lat]);
+                //     const pixelValue = geoblaze.identify(layer.georasters[0], [latlng.lng, latlng.lat]);
+                //     $('#info').textContent = `${pixelValue}`;
+                // } else {
+                //     $('#info').textContent = `None`;
+                // }
+            });
+
+
+            // 컬러바 생성 및 추가
+            // const legend = create_legend(minValue, maxValue, numberOfClasses, scale);
+            // L.control.legend = function (opts) {
+            //     return new L.Control.Legend(opts);
+            // };
+            // L.control.legend({position: 'bottomright'}).addTo(map);
+            // });
         });
 
     function create_legend(minValue, maxValue, numberOfClasses, scale) {
