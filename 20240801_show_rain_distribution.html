@@ -59,8 +59,7 @@
     L.control.Legend({position: 'bottomright'}).addTo(map);
 
     // GeoTIFFファイルを表示
-    // let geotiff_file = "./Z__C_RJTD_20190630202000_SRF_GPV_Ggis1km_Prr60lv_Aper10min_ANAL_grib2.tif";
-    let geotiff_file = "./air.mon.mean.tif";
+    let geotiff_file = "data/Z__C_RJTD_20190630202000_SRF_GPV_Ggis1km_Prr60lv_Aper10min_ANAL_grib2.tif";
     fetch(geotiff_file)
         .then(response => response.arrayBuffer())
         .then(arrayBuffer => {
