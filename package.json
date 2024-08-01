@@ -1,0 +1,15 @@
+{
+  "name": "web-front-geoTiffViewer",
+  "version": "0.8.0",
+  "description": "web-front-geoTiffViewer",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "Yoshito KIKUMORI",
+  "license": "ISC",
+  "dependencies": {
+    "chroma-js": "^2.6.0",
+    "electron": "^22.0.0"
+  }
+}

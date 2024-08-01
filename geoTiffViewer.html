@@ -1,0 +1,247 @@
+<html lang="ko">
+<head>
+    <meta charset="utf-8"/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.1/dist/leaflet.css"
+          integrity="sha512Rksm5RenBEKSKFjgI3a41vrjkw4EVPlJ3+OiI65vTjIdo9brlAacEuKOiQ5OFh7cOI1bkDwLqdLw3Zg0cRJLQ=="
+          crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.3.1/dist/leaflet.js"
+            integrity="sha512-/Nsx9X4HebavoBvEBuyp3I7od5tA0UzAxs+j83KgC8PU0kgB4XiK4Lfe4y4cgBtaRJQEIFCW+oC506aPT2L1zw=="
+            crossorigin=""></script>
+    <script src="https://unpkg.com/georaster"></script>
+    <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+
+    <!--        <script src="https://unpkg.com/chroma-js"></script>-->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chroma-js/2.1.0/chroma.min.js"></script>
+    <script src="https://unpkg.com/georaster-layer-for-leaflet/dist/georaster-layer-for-leaflet.min.js"></script>
+
+    <style>
+        #mapid {
+            width: 100%;
+            height: 100%;
+        }
+
+        #legend {
+            text-align: center;
+        }
+
+        #legend_plane {
+            border: 1px solid silver;
+        }
+
+        .color-bar {
+            display: flex;
+            margin-top: 20px;
+        }
+
+        .color-bar div {
+            flex: 1;
+            height: 30px;
+        }
+    </style>
+</head>
+
+<body>
+<div id="mapid"></div>
+<!--<div id="colorbar" class="color-bar"></div>-->
+
+<script type="text/javascript">
+
+    // NetCDf를 이용한 geoTiff 변환
+    // https://help.marine.copernicus.eu/en/articles/5029956-how-to-convert-netcdf-to-geotiff
+    // https://nsidc.org/data/user-resources/help-center/how-convert-netcdf-variables-geotiff
+
+
+    let map = L.map('mapid', {
+        center: [37.0, 137.],
+        zoom: 5.5,
+    });
+
+
+    let tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19
+        // attribution: '© <a href="http://osm.org/copyright">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>',
+    });
+    tileLayer.addTo(map);
+
+    // 縮尺を表示
+    // L.control.scale({maxWidth: 200, position: 'bottomleft', imperial: false}).addTo(map);
+
+    // 地図上に凡例を表示
+    // L.Control.Legend = L.Control.extend({
+    //     onAdd: function (map) {
+    //         return create_legend();
+    //     }
+    // });
+    //
+    // L.control.Legend = function (opts) {
+    //     return new L.Control.Legend(opts);
+    // }
+    // L.control.Legend({position: 'bottomright'}).addTo(map);
+
+
+    // GeoTIFFファイルを表示
+    // let geotiff_file = "data/Z__C_RJTD_20190630202000_SRF_GPV_Ggis1km_Prr60lv_Aper10min_ANAL_grib2.tif";
+    let geotiff_file = "data/air.mon.mean_new.tif";
+    fetch(geotiff_file)
+        .then(response => response.arrayBuffer())
+        .then(arrayBuffer => {
+            parseGeoraster(arrayBuffer).then(georaster => {
+
+                debugger;
+                // let scale = chroma.scale(["#f5f7ff", "#d6e5f0", "#a4cbe5", "#81aed6", "#668ec1", "#eeef4c", "#f7b768", "#f55857", "#aa6a81", "#765a88"])
+                //     .domain([0, 200]).classes([0, 1, 3, 5, 10, 20, 30, 40, 50, 80, 200]);
+
+                // 클래스 구간 동적으로 설정하기 (예: 10개의 구간)
+                const minValue = georaster.mins[0]
+                const maxValue = georaster.maxs[0]
+
+                const numberOfClasses = 10;
+                const classInterval = (maxValue - minValue) / numberOfClasses;
+                const classes = Array.from({length: numberOfClasses + 1}, (_, i) => minValue + i * classInterval);
+                const scale = chroma.scale('Spectral').domain([maxValue, minValue]).classes(classes);
+
+                let layer = new GeoRasterLayer({
+                    georaster: georaster,
+                    opacity: 0.6,
+                    pixelValuesToColorFn: function (pixelValues) {
+                        let pixelValue = pixelValues[0]; // there's just one band in this raster
+                        if (pixelValue === 0) return null;
+                        let color = scale(pixelValue).hex();
+                        return color;
+                    },
+                    resolution: 256
+                });
+
+                layer.addTo(map);
+                map.fitBounds(layer.getBounds());
+
+
+                // georaster 데이터를 GeoJSON 형식으로 변환
+                // const geojson = geoblaze.isolines(georaster, 'elevation', {levels: classes});
+                //
+                // // 컨투어 레이어 추가
+                // L.geoJSON(geojson, {
+                //     style: function (feature) {
+                //         return {
+                //             color: scale(feature.properties.value).hex(),
+                //             weight: 2
+                //         };
+                //     }
+                // }).addTo(map);
+
+                // 컨투어 레이어 추가
+                L.contour({
+                    geojson: L.geoJson(georaster),
+                    style: function (feature) {
+                        return {
+                            color: scale(feature.properties.value).hex(),
+                            weight: 2
+                        };
+                    }
+                }).addTo(map);
+
+
+                // 컬러바 생성 및 추가
+                // const legend = create_legend(minValue, maxValue, numberOfClasses, scale);
+                // L.control.legend = function (opts) {
+                //     return new L.Control.Legend(opts);
+                // };
+                // L.control.legend({position: 'bottomright'}).addTo(map);
+            });
+        });
+
+    function create_legend(minValue, maxValue, numberOfClasses, scale) {
+        let cs = L.DomUtil.create('canvas', 'legend');
+        const legend_plane_width = 100;
+        const legend_plane_height = 240;
+        const div_num = 100;
+        const margin_left = 10;
+        const margin_top = 30;
+        const legend_width = 30;
+        const div_height = 2;
+        cs.width = legend_plane_width;
+        cs.height = legend_plane_height;
+
+        if (cs.getContext) {
+            let ctx = cs.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, legend_plane_width, legend_plane_height);
+
+            for (let i = 0; i < div_num; i++) {
+                const value = minValue + ((maxValue - minValue) * (div_num - i) / div_num);
+                ctx.fillStyle = scale(value);
+                ctx.fillRect(margin_left, margin_top + i * div_height, legend_width, div_height);
+            }
+
+            ctx.strokeStyle = "black";
+            ctx.lineWidth = 1;
+            ctx.textBaseline = 'center';
+            ctx.textAlign = 'left';
+            ctx.font = '12px sans-serif';
+            ctx.fillStyle = 'black';
+            ctx.fillText("Rainfall (mm/h)", 4, 20);
+
+            const step = (maxValue - minValue) / numberOfClasses;
+            for (let i = 0; i <= numberOfClasses; i++) {
+                const value = minValue + i * step;
+                const y = margin_top + (div_num - (i * div_num / numberOfClasses)) * div_height;
+                ctx.fillText(value.toFixed(1), margin_left + legend_width + 5, y + 5);
+            }
+        }
+        return cs;
+    }
+
+    // function create_legend() {
+    //     let cs = L.DomUtil.create('canvas');
+    //     const legend_plane_width = 100;
+    //     const legend_plane_height = 240;
+    //     const div_num = 100;
+    //     const margin_left = 10;
+    //     const margin_top = 30;
+    //     const legend_width = 30;
+    //     const div_height = 2;
+    //     const tick_length = 5;
+    //     const margin_text_lengend = 30;
+    //     cs.width = legend_plane_width;
+    //     cs.height = legend_plane_height;
+    //     if (cs.getContext) {
+    //
+    //         let ctx = cs.getContext('2d');
+    //         let scl = chroma.scale(["#f5f7ff", "#d6e5f0", "#a4cbe5", "#81aed6", "#668ec1", "#eeef4c", "#f7b768", "#f55857", "#aa6a81", "#765a88"]).classes(10);
+    //         ctx.fillStyle = '#ffffff';
+    //         ctx.fillRect(0, 0, legend_plane_width, legend_plane_height);
+    //
+    //         for (let i = 0; i < div_num; i++) {
+    //             ctx.fillStyle = scl((div_num - i) / div_num);
+    //             ctx.fillRect(margin_left, margin_top + i * div_height, legend_width, div_height);
+    //         }
+    //         ctx.strokeStyle = "black";
+    //         ctx.lineWidth = 1;
+    //
+    //         ctx.textBaseline = 'center';
+    //         ctx.textAlign = 'left';
+    //
+    //         ctx.font = '12px sans-serif';
+    //         ctx.fillStyle = 'black';
+    //         ctx.fillText("Rainfall (mm/h)", 4, 20);
+    //         const left_pos_top = 46;
+    //         const top_pos = 45;
+    //         ctx.fillText("80 -", left_pos_top, top_pos);
+    //         ctx.textAlign = 'right';
+    //         const left_pos_2nd = 90;
+    //         ctx.fillText("50 - 80", left_pos_2nd, top_pos + 21);
+    //         ctx.fillText("40 - 50", left_pos_2nd, top_pos + 42);
+    //         ctx.fillText("30 - 40", left_pos_2nd, top_pos + 63);
+    //         ctx.fillText("20 - 30", left_pos_2nd, top_pos + 84);
+    //         ctx.fillText("10 - 20", left_pos_2nd, top_pos + 103);
+    //         ctx.fillText(" 5 - 10", left_pos_2nd - 1, top_pos + 122);
+    //         ctx.fillText(" 3 -  5", left_pos_2nd - 2, top_pos + 142);
+    //         ctx.fillText(" 1 -  3", left_pos_2nd - 2, top_pos + 162);
+    //         ctx.fillText("    -  1", left_pos_2nd - 2, top_pos + 180);
+    //     }
+    //     return cs;
+    // }
+</script>
+</body>
+</html>
