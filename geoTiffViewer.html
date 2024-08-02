@@ -17,11 +17,15 @@
     <script src="https://unpkg.com/geoblaze"></script>
     <script src="https://unpkg.com/georaster-utils"></script>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://unpkg.com/geotiff-tile-web-worker"></script>
+    <script src="https://cdn.jsdelivr.net/npm/geotiff"></script>
+    <script src="https://unpkg.com/easy-file-saver"></script>
+    <script src="https://cdn.plot.ly/plotly-2.34.0.min.js" charset="utf-8"></script>
 
     <style>
         #mapid {
             width: 100%;
-            height: 100%;
+            height: 90%;
         }
 
         #legend {
@@ -46,10 +50,15 @@
 
 <body>
 <div id="mapid"></div>
-<div id="info">Move your mouse over the map</div>
+<div id="info"></div>
+<div id="info2"></div>
 <!--<div id="colorbar" class="color-bar"></div>-->
 
 <script type="text/javascript">
+
+    var $$ = {};
+
+    // console.log(GeoTIFF);
 
     let map = L.map('mapid', {
         center: [37.0, 137.],
@@ -82,6 +91,8 @@
     // GeoTIFFファイルを表示
     // let geotiff_file = "data/Z__C_RJTD_20190630202000_SRF_GPV_Ggis1km_Prr60lv_Aper10min_ANAL_grib2.tif";
     let geotiff_file = "data/air.mon.mean_new.tif";
+
+
     fetch(geotiff_file)
         .then(response => response.arrayBuffer())
         // .then(arrayBuffer => {
@@ -90,7 +101,7 @@
             parseGeoraster(arrayBuffer)
         ]))
         .then(([georaster]) => {
-            debugger;
+            // debugger;
             // let scale = chroma.scale(["#f5f7ff", "#d6e5f0", "#a4cbe5", "#81aed6", "#668ec1", "#eeef4c", "#f7b768", "#f55857", "#aa6a81", "#765a88"])
             //     .domain([0, 200]).classes([0, 1, 3, 5, 10, 20, 30, 40, 50, 80, 200]);
 
@@ -114,6 +125,8 @@
                 },
                 resolution: 256
             });
+
+            $$['layer'] = layer
 
             layer.addTo(map);
 
@@ -145,22 +158,33 @@
             //     }
             // }).addTo(map);
 
-            map.on('mousemove', function (e) {
-                const latlng = e.latlng;
-                const pixelValue = geoblaze.identify(layer.georasters[0], [latlng.lng, latlng.lat]) || '';
-                $('#info').text(pixelValue)
+            // geoblaze GeoTiff 데이터 통계, 특정 지점/영역
+            // map.on('mousemove', function (e) {
+            map.on('click', function (e) {
+                let latlng = e.latlng;
+                let pixelVal = geoblaze.identify(layer.georasters[0], [latlng.lng, latlng.lat]) || '';
+                let areaMeanVal = geoblaze.mean(layer.georasters[0])
+                // $('#info').text(`pixelVal: ${latlng.lng} / ${latlng.lat} / ${pixelVal}`)
+                // $('#info2').text(`areaMeanVal: ${areaMeanVal}`)
 
+                let html = (`<span class="popupText">lat: ${(latlng.lng).toFixed(2)} <br> lon: ${(latlng.lat).toFixed(2)} <br> val: ${(pixelVal[0]).toFixed(2)}</span>`);
+                let popup = L.popup().setLatLng(latlng).setContent(html).openOn(map);
 
-                // $('#info').textContent = `${pixelValue}`;
+                // debugger;
+                // georastertimeSeries = geoblaze.load(geotiff_file)
+                // georastertimeSeries.toCanvas({width: georastertimeSeries.width, height: georastertimeSeries.height})
 
-                // const [x, y] = map.project(latlng, layer._tileZoom).divideBy(256).floor();
-                // if (pixelValue > 0) {
-                //     // const pixelValue = geoblaze.identify(layer._raster, [latlng.lng, latlng.lat]);
-                //     const pixelValue = geoblaze.identify(layer.georasters[0], [latlng.lng, latlng.lat]);
-                //     $('#info').textContent = `${pixelValue}`;
-                // } else {
-                //     $('#info').textContent = `None`;
-                // }
+                // const worker = createWorker();
+
+                // geoblaze.min(layer.georasters[0])
+                // geoblaze.max(layer.georasters[0])
+                // geoblaze.mean(layer.georasters[0])
+                // geoblaze.median(layer.georasters[0])
+                // geoblaze.mode(layer.georasters[0])
+
+                // geoblaze.stats((layer.georasters[0], [latlng.lng, latlng.lat], { stats: ["count", "min", "max", "sum"] }, undefined, { vrm: [2, 2], rescale: true });
+                // fetch(layer.georasters[0])
+                // geoblaze.get(layer.georasters[0], [latlng.lng, latlng.lat])
             });
 
 
